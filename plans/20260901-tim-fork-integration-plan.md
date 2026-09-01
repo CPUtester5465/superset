@@ -12,10 +12,13 @@ Tracker state, verified 2026-09-01:
 |---|---|---|
 | [#6445](https://github.com/superset-sh/superset/issues/6445) | open | "Gitlab Support" — the general request |
 | [#7017](https://github.com/superset-sh/superset/issues/7017) | open | scoped: MRs in the Review pane via `glab` — MR discovery, CI checks, review status, merge |
+| [#7018](https://github.com/superset-sh/superset/pull/7018) | open, active | #7017's own author implementing it — 52 files, +2188/−230, updated 2026-08-31 |
 | [#2817](https://github.com/superset-sh/superset/pull/2817) | closed, unmerged | community PR that already did GitLab MRs in the Reviews tab — the map of the seams |
 | [#5649](https://github.com/superset-sh/superset/issues/5649) | open | non-GitHub remotes silently duplicate projects across machines; maintainer intends host/local-first identity + explicit cloud link |
+| [#5731](https://github.com/superset-sh/superset/pull/5731) | merged 2026-07-19 | the local-first half of #5649 — host.db owns projects, workspace cloud sync retired |
+| [#5353](https://github.com/superset-sh/superset/pull/5353) | open, stale | older competing GitLab PR, untouched since 2026-06-27 |
 
-**Verdict: don't write code yet.** #5649's identity rework moves the ground any GitLab implementation would stand on — building before it lands means rebasing the hard part. The tripwire: when #5649 closes, re-check #7017; if still unclaimed, implement it here with #2817 as the seam map and #7017's scope list as the contract. Until then the sibli GitLab repos keep working as local-only projects, which is what they are today anyway.
+**Verdict (revised 2026-09-01, second pass): don't write code, and the tripwire moved.** The original tripwire — "when #5649 closes, implement #7017 if unclaimed" — is stale on both ends: #5731 already merged the local-first rework #5649 was waiting on (the issue stays open, silent since 2026-07-13, presumably for the explicit-cloud-link half), and #7017 is claimed — its author is building it in #7018. New tripwire: watch #7018. When it merges, test it against the four sibli repos; the likeliest gap is nested-group remotes (`gitlab.com/sr-ai/ray/*`) — upstream's parser regexes are two-segment (`packages/shared/src/github-remote.ts`) and the automated triage on #7017 flags the namespace shape as the first design decision. Building here anyway would be 25–40 files across six subsystems and would collide with #7018. Until then the sibli GitLab repos keep working as local-only projects, which is what they are today anyway.
 
 ## 2. Grouping projects in the sidebar — nothing to build
 
@@ -28,6 +31,8 @@ What exists today and covers the gap meanwhile: per-project accent color/icon (p
 The CLI reference is explicit that this hole is by design: "Workspaces are host-owned; there is no org-wide listing (the desktop app is the cross-host view)." `superset terminals list` takes exactly one `--workspace`; `superset agents list` returns configured presets, not running sessions. Seeing everything from a shell therefore means iterating workspaces client-side — `~/sub-projects/bin/superset-overview.sh` does that today with a jq loop.
 
 A `superset sessions list --local` (or `terminals list --all`) that fans out server-side in the host service would replace that loop and is small enough to land as an outside PR. Before writing it: search the tracker for prior art, and check whether the chat sessions (`agents create` returns `kind: "terminal" | "chat"`) belong in the same listing — a terminals-only view would under-report once chat sessions are in use.
+
+Both checks done 2026-09-01: no prior art in the tracker, and the change is smaller than guessed. The tRPC procedure (`terminal.list`, `packages/host-service/src/trpc/router/terminal/terminal.ts:130`) already takes an optional `workspaceId`, and the handler (`listLiveTerminalSessions`, `packages/host-service/src/terminal/terminal.ts:861`) is documented "host-wide by default" — it reads the `terminal_sessions` table directly, no per-workspace fan-out needed. The `--workspace` requirement is artificial, imposed only at the CLI edge (`packages/cli/src/commands/terminals/list/command.ts:10`) and the MCP tool mirror. The chat worry is moot: `AgentKind` (`packages/shared/src/agent-definition.ts:14`) is `"terminal"` only now, the `"chat"` union is dead outside stale docs. Decision 2026-09-01: implement the minimal version — optional `--workspace`, host-wide default, a WORKSPACE column in the output, MCP parity, docs line.
 
 ## Not in scope
 
