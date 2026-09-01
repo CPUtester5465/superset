@@ -944,15 +944,16 @@ superset terminals create --workspace ws_…
 <Command
 	name="superset terminals list"
 	options={[
-		{ flag: "--workspace <id>", required: true, description: "Workspace UUID." },
-		{ flag: "--host <id>", description: "Host the workspace lives on (default: this machine)." },
+		{ flag: "--workspace <id>", description: "Workspace UUID (omit to list every workspace on the host)." },
+		{ flag: "--host <id>", description: "Host to list on (default: this machine)." },
 	]}
 	output={`{
   sessions: Array<TerminalSession>;
 }`}
 >
-List the live terminal sessions in a workspace. Presence in the list means the
-PTY exists, not that an agent inside it is working or idle.
+List live terminal sessions — the whole host by default, or one workspace with
+`--workspace`. Presence in the list means the PTY exists, not that an agent
+inside it is working or idle.
 </Command>
 
 <Command

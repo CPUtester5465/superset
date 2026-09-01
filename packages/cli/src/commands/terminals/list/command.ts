@@ -1,14 +1,42 @@
-import { CLIError, string } from "@superset/cli-framework";
+import { CLIError, string, table } from "@superset/cli-framework";
 import { getHostId } from "@superset/shared/host-info";
 import { command } from "../../../lib/command";
 import { resolveHostTarget } from "../../../lib/host-target";
 import { findWorkspaceOnHost } from "../../../lib/host-workspaces";
 
+interface TerminalSessionRow {
+	terminalId: string;
+	workspaceId: string;
+	createdAt: number;
+	exited: boolean;
+	attached: boolean;
+	title: string | null;
+}
+
 export default command({
-	description: "List the live terminal sessions in a workspace",
+	description:
+		"List live terminal sessions — every workspace on the host, or one with --workspace",
 	options: {
-		workspace: string().required().desc("Workspace ID"),
-		host: string().desc("Host the workspace lives on (default: this machine)"),
+		workspace: string().desc(
+			"Workspace ID (omit to list sessions across all workspaces on the host)",
+		),
+		host: string().desc("Host to list on (default: this machine)"),
+	},
+	display: (data) => {
+		// Sessions known only to the pty-daemon (e.g. after a host-service
+		// restart) carry no title, so group by workspace rather than name.
+		const sessions = [
+			...((data as { sessions: TerminalSessionRow[] }).sessions ?? []),
+		].sort(
+			(a, b) =>
+				a.workspaceId.localeCompare(b.workspaceId) || a.createdAt - b.createdAt,
+		);
+		return table(
+			sessions as unknown as Record<string, unknown>[],
+			["workspaceId", "title", "attached", "exited", "terminalId"],
+			["WORKSPACE", "TITLE", "ATTACHED", "EXITED", "TERMINAL"],
+			[36, 30, 8, 6, 36],
+		);
 	},
 	run: async ({ ctx, options }) => {
 		const organizationId = ctx.config.organizationId;
@@ -17,15 +45,18 @@ export default command({
 		}
 
 		const hostId = options.host ?? getHostId();
-		const { workspace } = await findWorkspaceOnHost(
-			{ organizationId, userJwt: ctx.bearer, api: ctx.api, hostId },
-			options.workspace,
-		);
-		if (!workspace) {
-			throw new CLIError(
-				`Workspace not found on host ${hostId}: ${options.workspace}`,
-				"Pass --host <id> if it lives on another machine",
+		const workspaceId = options.workspace ?? undefined;
+		if (workspaceId) {
+			const { workspace } = await findWorkspaceOnHost(
+				{ organizationId, userJwt: ctx.bearer, api: ctx.api, hostId },
+				workspaceId,
 			);
+			if (!workspace) {
+				throw new CLIError(
+					`Workspace not found on host ${hostId}: ${workspaceId}`,
+					"Pass --host <id> if it lives on another machine",
+				);
+			}
 		}
 
 		const target = await resolveHostTarget({
@@ -35,13 +66,8 @@ export default command({
 			api: ctx.api,
 		});
 
-		const result = await target.client.terminal.list.query({
-			workspaceId: options.workspace,
-		});
+		const result = await target.client.terminal.list.query({ workspaceId });
 
-		return {
-			data: result,
-			message: `${result.sessions.length} terminal(s) in workspace ${options.workspace}`,
-		};
+		return { data: result };
 	},
 });
