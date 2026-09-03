@@ -34,6 +34,23 @@ A `superset sessions list --local` (or `terminals list --all`) that fans out ser
 
 Both checks done 2026-09-01: no prior art in the tracker, and the change is smaller than guessed. The tRPC procedure (`terminal.list`, `packages/host-service/src/trpc/router/terminal/terminal.ts:130`) already takes an optional `workspaceId`, and the handler (`listLiveTerminalSessions`, `packages/host-service/src/terminal/terminal.ts:861`) is documented "host-wide by default" — it reads the `terminal_sessions` table directly, no per-workspace fan-out needed. The `--workspace` requirement is artificial, imposed only at the CLI edge (`packages/cli/src/commands/terminals/list/command.ts:10`) and the MCP tool mirror. The chat worry is moot: `AgentKind` (`packages/shared/src/agent-definition.ts:14`) is `"terminal"` only now, the `"chat"` union is dead outside stale docs. Decision 2026-09-01: implement the minimal version — optional `--workspace`, host-wide default, a WORKSPACE column in the output, MCP parity, docs line.
 
-## Not in scope
+## The arrangement (2026-09-03): waiting vs building
 
-Slack/Linear integrations (Pro, already usable — connect via dashboard Integrations), the PR view (GitHub side is done and free-tier), and anything touching the relay. This fork is not a divergence — branches here are per-track, rebased on upstream `main`, and exist to become upstream PRs or die.
+Decided after the first implementation round. Two lists, and a boundary rule.
+
+**Waiting on upstream** — watch, verify on merge, never build in parallel:
+
+| What | Where | State when checked |
+|---|---|---|
+| GitLab MRs in Review pane | [#7018](https://github.com/superset-sh/superset/pull/7018) | active; branch tested here 2026-09-01 — nested `sr-ai/ray/*` groups parse, its suites pass, `glab` authed on the host |
+| Sidebar collections (the "sibli folder") | [#5981](https://github.com/superset-sh/superset/pull/5981) | rebased 2026-09-01, mergeable, review pending |
+| Cloud-link half of local-first identity | [#5649](https://github.com/superset-sh/superset/issues/5649) | background only |
+
+**Building ourselves:**
+
+- `feat/terminals-list-host-wide` — committed, PR draft written; an upstream contribution, opens from the fork when Tim says go.
+- `fork/patched` (dormant option) — upstream `main` + cherry-picked #7018/#5981 built as a canary desktop, only if an upstream PR stalls for weeks while the missing feature hurts daily. Not started; both PRs are active.
+
+**Boundary rule — what never goes in the fork:** ClickUp, Shortcut, Telegram. Superset's integration framework (Slack/Linear/Notion/Sentry) is cloud-side and a fork can't deploy the cloud, so there is no seam to add providers into. They already work at the agent layer instead: Superset-launched Claude agents inherit the ClickUp and Shortcut MCPs from user config, and push-style flows (digests, alerts) go through tg-gateway automation kinds. Also out: the relay, and anything requiring commits into the sibli work repos (kept read-only by decision 2026-09-03 — no `.superset/config.json` there; workspaces bootstrap via each repo's own nix-direnv).
+
+Steady state of the fork: upstream-tracking `main`, per-track contribution branches, this doc. Branches exist to become upstream PRs or die; `fork/patched` is the one sanctioned exception, and it stays dormant until needed.
